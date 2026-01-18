@@ -6,24 +6,34 @@ include: "//youtube/**/*.explore.lkml"
 # Learn more at: https://cloud.google.com/looker/docs/data-modeling/learning-lookml/refinements
 #
 
-explore: channel_end_screens {
-  label: "End Screen Performance"
-  view_name: channel_end_screens
-
-  join: channel_combined_a2 {
+explore: +channel_combined_a2 {
+  join: channel_end_screens {
+    view_label: "End Screens"
     type: left_outer
-    sql_on: ${channel_end_screens.video_id} = ${channel_combined_a2.video_id}
-      AND ${channel_end_screens.date_date} = ${channel_combined_a2._data_date} ;;
-    relationship: many_to_one
+    relationship: one_to_many
+    sql_on: ${channel_combined_a2.video_id} = ${channel_end_screens.video_id}
+      AND ${channel_combined_a2.date} = ${channel_end_screens.date_date} ;;
   }
 }
 
+explore: playlist_combined_report {
+  label: "Playlist Performance"
+  view_label: "Playlist Metrics"
+}
 
-# Refine Standard Reports (Point a2 views to a3 tables)
+#########################################################
+# 1. CORE REPORT REFINEMENTS (Points to 'a3' tables)
+#########################################################
 
 view: +channel_basic_a2 {
-  sql_table_name: Staccato2011_Youtube.channel_basic_a3_ytc ;;
+  sql_table_name: staccatodatafactory.Staccato2011_Youtube.channel_basic_a3_ytc ;;
 
+  # Added 'month_name' to the timeframe list
+  dimension_group: _data {
+    timeframes: [raw, date, week, month, month_name, quarter, year]
+  }
+
+  # --- New Power Metrics ---
   measure: engaged_views {
     type: sum
     sql: ${TABLE}.engaged_views ;;
@@ -33,41 +43,33 @@ view: +channel_basic_a2 {
   measure: subscribers_gained {
     type: sum
     sql: ${TABLE}.subscribers_gained ;;
-    value_format_name: decimal_0
   }
 
   measure: subscribers_lost {
     type: sum
     sql: ${TABLE}.subscribers_lost ;;
-    value_format_name: decimal_0
   }
 
   measure: subscriber_churn_rate {
     type: number
     sql: 1.0 * ${subscribers_lost} / NULLIF(${subscribers_gained}, 0) ;;
     value_format_name: percent_2
-    description: "Subscribers Lost divided by Subscribers Gained."
+    description: "Subscribers Lost divided by Subscribers Gained"
   }
 }
 
 view: +channel_combined_a2 {
-  sql_table_name: Staccato2011_Youtube.channel_combined_a3_ytc ;;
-}
-
-view: +channel_device_os_a2 {
-  sql_table_name: Staccato2011_Youtube.channel_device_os_a3_ytc ;;
-}
-
-view: +channel_playback_location_a2 {
-  sql_table_name: Staccato2011_Youtube.channel_playback_location_a3_ytc ;;
-}
-
-view: +channel_province_a2 {
-  sql_table_name: Staccato2011_Youtube.channel_province_a3_ytc ;;
+  sql_table_name: staccatodatafactory.Staccato2011_Youtube.channel_combined_a3_ytc ;;
+  dimension_group: _data {
+    timeframes: [time, date, week, month, month_name, quarter, year]
+  }
 }
 
 view: +channel_traffic_source_a2 {
-  sql_table_name: Staccato2011_Youtube.channel_traffic_source_a3_ytc ;;
+  sql_table_name: staccatodatafactory.Staccato2011_Youtube.channel_traffic_source_a3_ytc ;;
+  dimension_group: _data {
+    timeframes: [raw, date, week, month, month_name, quarter, year]
+  }
 
   measure: impressions {
     type: sum
@@ -83,37 +85,49 @@ view: +channel_traffic_source_a2 {
   }
 }
 
-view: +channel_subtitles_a2 {
-  sql_table_name: Staccato2011_Youtube.channel_subtitles_a3_ytc ;;
+#########################################################
+# 2. STANDARD VIEW REFINEMENTS (Points a2 -> a3)
+#########################################################
+
+view: +channel_device_os_a2 {
+  sql_table_name: staccatodatafactory.Staccato2011_Youtube.channel_device_os_a3_ytc ;;
 }
 
-# 2. Refine Derived Tables (Hardcoding the full SQL path)
+view: +channel_playback_location_a2 {
+  sql_table_name: staccatodatafactory.Staccato2011_Youtube.channel_playback_location_a3_ytc ;;
+}
 
-# Fix video_facts to use the 'a3' combined table
+view: +channel_province_a2 {
+  sql_table_name: staccatodatafactory.Staccato2011_Youtube.channel_province_a3_ytc ;;
+}
+
+view: +channel_subtitles_a2 {
+  sql_table_name: staccatodatafactory.Staccato2011_Youtube.channel_subtitles_a3_ytc ;;
+}
+
+#########################################################
+# 3. DERIVED TABLE FIXES (Hardcoding SQL paths)
+#########################################################
+
 view: +video_facts {
   derived_table: {
     sql: SELECT
           channel_combined_a3.video_id  AS video_id,
           AVG(channel_combined_a3.average_view_duration_seconds ) AS avg_view_duration_s,
-          MAX(ROUND((channel_combined_a3.average_view_duration_seconds/(nullif(channel_combined_a3.average_view_duration_percentage/100,0)) ))) AS video_length_seconds
+          MAX(ROUND((channel_combined_a3.average_view_duration_seconds/(nullif(channel_combined_a3.average_view_duration_percentage/100,0)) ))) AS video_length_seconds,
+          -- Added Weighted Average Percentage Viewed
+          SUM(channel_combined_a3.average_view_duration_percentage * channel_combined_a3.views) / NULLIF(SUM(channel_combined_a3.views), 0) as weighted_avg_percentage
         FROM `staccatodatafactory.Staccato2011_Youtube.channel_combined_a3_ytc` AS channel_combined_a3
         GROUP BY 1
        ;;
   }
 
-  dimension: average_percentage_viewed {
-    type: number
-    sql: ${TABLE}.avg_view_duration_percentage ;;
-    value_format_name: percent_2
-  }
-
   measure: weighted_average_percentage_viewed {
     type: number
-    sql: SUM(${TABLE}.average_view_duration_percentage * ${TABLE}.views) / NULLIF(SUM(${TABLE}.views), 0) ;;
+    sql: ${TABLE}.weighted_avg_percentage ;;
     value_format_name: percent_2
-    description: "The average percentage of a video your audience watches per view."
+    description: "Average percentage of video watched, weighted by views."
   }
-
 }
 
 view: +video_playlist_facts {
@@ -129,14 +143,16 @@ view: +video_playlist_facts {
   }
 }
 
-# New Datatable Reports (Missing from views)
+#########################################################
+# 4. NEW VIEWS (Unlocking End Screens & Playlist Reports)
+#########################################################
 
 view: channel_end_screens {
   sql_table_name: staccatodatafactory.Staccato2011_Youtube.channel_end_screens_a1_ytc ;;
 
   dimension_group: date {
     type: time
-    timeframes: [date, week, month, year]
+    timeframes: [date, week, month, month_name, year]
     sql: ${TABLE}.date ;;
   }
 
@@ -148,35 +164,31 @@ view: channel_end_screens {
   dimension: end_screen_element_type {
     type: string
     sql: ${TABLE}.end_screen_element_type ;;
-    description: "The type of end screen element (e.g., Subscribe, Best for Viewer)."
-  }
-
-  measure: end_screen_element_impressions {
-    type: sum
-    sql: ${TABLE}.end_screen_element_impressions ;;
-    description: "The number of times an end screen element was displayed."
   }
 
   measure: end_screen_element_clicks {
     type: sum
     sql: ${TABLE}.end_screen_element_clicks ;;
-    description: "The number of times an end screen element was clicked."
   }
 
-  measure: end_screen_click_rate {
+  measure: end_screen_element_impressions {
+    type: sum
+    sql: ${TABLE}.end_screen_element_impressions ;;
+  }
+
+  measure: end_screen_ctr {
     type: number
     sql: 1.0 * ${end_screen_element_clicks} / NULLIF(${end_screen_element_impressions}, 0) ;;
     value_format_name: percent_2
-    description: "Clicks divided by Impressions."
   }
 }
 
-view: playlist_combined {
+view: playlist_combined_report {
   sql_table_name: staccatodatafactory.Staccato2011_Youtube.playlist_combined_a2_ytc ;;
 
   dimension_group: date {
     type: time
-    timeframes: [date, week, month, year]
+    timeframes: [date, week, month, month_name, year]
     sql: ${TABLE}.date ;;
   }
 
@@ -194,11 +206,5 @@ view: playlist_combined {
     type: average
     sql: ${TABLE}.average_view_duration_seconds ;;
     value_format: "h:mm:ss"
-  }
-
-  measure: playlist_red_views {
-    type: sum
-    sql: ${TABLE}.red_views ;;
-    label: "YouTube Premium Views"
   }
 }
