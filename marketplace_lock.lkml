@@ -7,7 +7,7 @@ marketplace_ref: {
   listing: "youtube"
   version: "1.0.2"
   models: ["youtube_channel_owner"]
-  override_constant: CONNECTION_NAME { value:"connection_name" }
-  override_constant: schema { value:"youtube_ads_export" }
-  override_constant: table_suffix { value:"yrc" }
+  override_constant: CONNECTION_NAME { value:"staccatobq" }
+  override_constant: schema { value:"Staccato2011_Youtube" }
+  override_constant: table_suffix { value:"ytc" }
 }
