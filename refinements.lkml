@@ -64,3 +64,87 @@ view: +video_playlist_facts {
        ;;
   }
 }
+
+view: channel_end_screens {
+  sql_table_name: staccatodatafactory.Staccato2011_Youtube.channel_end_screens_a1_ytc ;;
+
+  dimension_group: date {
+    type: time
+    timeframes: [date, week, month, year]
+    sql: ${TABLE}.date ;;
+  }
+
+  dimension: video_id {
+    type: string
+    sql: ${TABLE}.video_id ;;
+  }
+
+  dimension: end_screen_element_type {
+    type: string
+    sql: ${TABLE}.end_screen_element_type ;;
+    description: "The type of end screen element (e.g., Subscribe, Best for Viewer)."
+  }
+
+  measure: end_screen_element_impressions {
+    type: sum
+    sql: ${TABLE}.end_screen_element_impressions ;;
+    description: "The number of times an end screen element was displayed."
+  }
+
+  measure: end_screen_element_clicks {
+    type: sum
+    sql: ${TABLE}.end_screen_element_clicks ;;
+    description: "The number of times an end screen element was clicked."
+  }
+
+  measure: end_screen_click_rate {
+    type: number
+    sql: 1.0 * ${end_screen_element_clicks} / NULLIF(${end_screen_element_impressions}, 0) ;;
+    value_format_name: percent_2
+    description: "Clicks divided by Impressions."
+  }
+}
+
+view: playlist_combined {
+  sql_table_name: staccatodatafactory.Staccato2011_Youtube.playlist_combined_a2_ytc ;;
+
+  dimension_group: date {
+    type: time
+    timeframes: [date, week, month, year]
+    sql: ${TABLE}.date ;;
+  }
+
+  dimension: playlist_id {
+    type: string
+    sql: ${TABLE}.playlist_id ;;
+  }
+
+  measure: playlist_views {
+    type: sum
+    sql: ${TABLE}.views ;;
+  }
+
+  measure: playlist_average_view_duration {
+    type: average
+    sql: ${TABLE}.average_view_duration_seconds ;;
+    value_format: "h:mm:ss"
+  }
+
+  measure: playlist_red_views {
+    type: sum
+    sql: ${TABLE}.red_views ;;
+    label: "YouTube Premium Views"
+  }
+}
+
+explore: channel_end_screens {
+  label: "End Screen Performance"
+  view_name: channel_end_screens
+
+  join: channel_combined_a2 {
+    type: left_outer
+    sql_on: ${channel_end_screens.video_id} = ${channel_combined_a2.video_id}
+      AND ${channel_end_screens.date_date} = ${channel_combined_a2._data_date} ;;
+    relationship: many_to_one
+  }
+}
