@@ -5,10 +5,49 @@ include: "//youtube/**/*.explore.lkml"
 # Use LookML refinements to refine views and explores defined in the remote project.
 # Learn more at: https://cloud.google.com/looker/docs/data-modeling/learning-lookml/refinements
 #
-# 1. Refine Standard Reports (Point a2 views to a3 tables)
+
+explore: channel_end_screens {
+  label: "End Screen Performance"
+  view_name: channel_end_screens
+
+  join: channel_combined_a2 {
+    type: left_outer
+    sql_on: ${channel_end_screens.video_id} = ${channel_combined_a2.video_id}
+      AND ${channel_end_screens.date_date} = ${channel_combined_a2._data_date} ;;
+    relationship: many_to_one
+  }
+}
+
+
+# Refine Standard Reports (Point a2 views to a3 tables)
 
 view: +channel_basic_a2 {
   sql_table_name: Staccato2011_Youtube.channel_basic_a3_ytc ;;
+
+  measure: engaged_views {
+    type: sum
+    sql: ${TABLE}.engaged_views ;;
+    description: "The number of times a Short starts to play or replay. (Specific to YouTube Shorts)"
+  }
+
+  measure: subscribers_gained {
+    type: sum
+    sql: ${TABLE}.subscribers_gained ;;
+    value_format_name: decimal_0
+  }
+
+  measure: subscribers_lost {
+    type: sum
+    sql: ${TABLE}.subscribers_lost ;;
+    value_format_name: decimal_0
+  }
+
+  measure: subscriber_churn_rate {
+    type: number
+    sql: 1.0 * ${subscribers_lost} / NULLIF(${subscribers_gained}, 0) ;;
+    value_format_name: percent_2
+    description: "Subscribers Lost divided by Subscribers Gained."
+  }
 }
 
 view: +channel_combined_a2 {
@@ -29,6 +68,19 @@ view: +channel_province_a2 {
 
 view: +channel_traffic_source_a2 {
   sql_table_name: Staccato2011_Youtube.channel_traffic_source_a3_ytc ;;
+
+  measure: impressions {
+    type: sum
+    sql: ${TABLE}.impressions ;;
+    description: "How many times your video thumbnails were shown to viewers."
+  }
+
+  measure: source_click_through_rate {
+    type: number
+    sql: 1.0 * ${views} / NULLIF(${impressions}, 0) ;;
+    value_format_name: percent_2
+    description: "Clicks (Views) divided by Impressions for this specific traffic source."
+  }
 }
 
 view: +channel_subtitles_a2 {
@@ -48,10 +100,22 @@ view: +video_facts {
         GROUP BY 1
        ;;
   }
+
+  dimension: average_percentage_viewed {
+    type: number
+    sql: ${TABLE}.avg_view_duration_percentage ;;
+    value_format_name: percent_2
+  }
+
+  measure: weighted_average_percentage_viewed {
+    type: number
+    sql: SUM(${TABLE}.average_view_duration_percentage * ${TABLE}.views) / NULLIF(SUM(${TABLE}.views), 0) ;;
+    value_format_name: percent_2
+    description: "The average percentage of a video your audience watches per view."
+  }
+
 }
 
-# Fix video_playlist_facts to use the 'a2' playlist table
-# (Note: I used your project name 'staccatodatafactory' here directly)
 view: +video_playlist_facts {
   derived_table: {
     sql: SELECT date, video_id, playlist_id
@@ -64,6 +128,8 @@ view: +video_playlist_facts {
        ;;
   }
 }
+
+# New Datatable Reports (Missing from views)
 
 view: channel_end_screens {
   sql_table_name: staccatodatafactory.Staccato2011_Youtube.channel_end_screens_a1_ytc ;;
@@ -134,17 +200,5 @@ view: playlist_combined {
     type: sum
     sql: ${TABLE}.red_views ;;
     label: "YouTube Premium Views"
-  }
-}
-
-explore: channel_end_screens {
-  label: "End Screen Performance"
-  view_name: channel_end_screens
-
-  join: channel_combined_a2 {
-    type: left_outer
-    sql_on: ${channel_end_screens.video_id} = ${channel_combined_a2.video_id}
-      AND ${channel_end_screens.date_date} = ${channel_combined_a2._data_date} ;;
-    relationship: many_to_one
   }
 }
