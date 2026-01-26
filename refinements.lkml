@@ -1,5 +1,6 @@
 include: "//youtube/**/*.view.lkml"
 include: "//youtube/**/*.explore.lkml"
+include: "period_over_period.view.lkml"
 
 # #
 # Use LookML refinements to refine views and explores defined in the remote project.
@@ -206,5 +207,68 @@ view: playlist_combined_report {
     type: average
     sql: ${TABLE}.average_view_duration_seconds ;;
     value_format: "h:mm:ss"
+  }
+}
+
+#########################################################
+# 5. Date Comparison
+#########################################################
+
+view: +channel_combined_a2 {
+  extends: [period_over_period]
+
+  # Map the 'event' dimension to your actual date field
+  dimension_group: event {
+    sql: ${TABLE}.date ;;
+  }
+
+  # --- Comparison Measures (Views) ---
+
+  measure: views_current {
+    view_label: "Date Comparison"
+    type: sum
+    sql: ${TABLE}.views ;;
+    filters: [is_current_period: "yes"]
+  }
+
+  measure: views_previous {
+    view_label: "Date Comparison"
+    type: sum
+    sql: ${TABLE}.views ;;
+    filters: [is_previous_period: "yes"]
+  }
+
+  measure: views_change_pct {
+    view_label: "Date Comparison"
+    label: "Views % Change"
+    type: number
+    sql: 1.0 * (${views_current} - ${views_previous}) / NULLIF(${views_previous}, 0) ;;
+    value_format_name: percent_2
+  }
+
+  # --- Comparison Measures (Watch Time) ---
+
+  measure: watch_time_current {
+    view_label: "Date Comparison"
+    label: "Watch Time (Current)"
+    type: sum
+    sql: ${TABLE}.average_view_duration_seconds * ${TABLE}.views ;; # Approximate calculation if total not available
+    filters: [is_current_period: "yes"]
+  }
+
+  measure: watch_time_previous {
+    view_label: "Date Comparison"
+    label: "Watch Time (Previous)"
+    type: sum
+    sql: ${TABLE}.average_view_duration_seconds * ${TABLE}.views ;;
+    filters: [is_previous_period: "yes"]
+  }
+
+  measure: watch_time_change_pct {
+    view_label: "Date Comparison"
+    label: "Watch Time % Change"
+    type: number
+    sql: 1.0 * (${watch_time_current} - ${watch_time_previous}) / NULLIF(${watch_time_previous}, 0) ;;
+    value_format_name: percent_2
   }
 }
