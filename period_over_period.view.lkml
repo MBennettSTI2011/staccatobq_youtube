@@ -74,4 +74,13 @@ view: period_over_period {
       }
     }
   }
+
+  dimension: day_in_period {
+    type: number
+    label: "Day of Period"
+    group_label: "Date Comparison"
+    description: "Use this dimension on the X-Axis to overlay Current vs Previous periods."
+    sql: DATE_DIFF(${event_date}, {% date_start date_range %}, DAY) + 1 ;;
+  }
+
 }
